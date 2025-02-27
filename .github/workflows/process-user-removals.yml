@@ -1,0 +1,128 @@
+name: Process GitHub User Removals
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Run in test mode (no actual removals)'
+        type: boolean
+        default: true
+      usernames:
+        description: 'JSON array of GitHub usernames to remove'
+        type: string
+        required: false
+
+  repository_dispatch:
+    types: [remove_github_users]
+
+permissions:
+  contents: read
+
+jobs:
+  remove-users-from-cdcgov:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Debug Event Information
+        run: |
+          echo "=== Event Information ==="
+          echo "Event name: ${{ github.event_name }}"
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo "Event type: ${{ github.event.action }}"
+            echo "Payload: ${{ toJSON(github.event.client_payload) }}"
+            echo "Test mode: ${{ github.event.client_payload.test_mode }}"
+            echo "Usernames: ${{ toJSON(github.event.client_payload.usernames) }}"
+          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "Test mode: ${{ inputs.test_mode }}"
+            echo "Usernames: ${{ inputs.usernames }}"
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Generate GitHub App Token for CDCGov
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.GIT_APP_ONBOARD_OFFBOARD_APP_ID }}
+          private-key: ${{ secrets.GIT_APP_ONBOARD_OFFBOARD_PRIVATE_KEY }}
+          owner: cdcgov
+
+      - name: Set test mode and usernames
+        id: params
+        run: |
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo "TEST_MODE=${{ github.event.client_payload.test_mode }}" >> $GITHUB_ENV
+            echo "USERNAMES_JSON='${{ toJSON(github.event.client_payload.usernames) }}'" >> $GITHUB_ENV
+          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "TEST_MODE=${{ inputs.test_mode }}" >> $GITHUB_ENV
+            # Use provided usernames or empty array if not provided
+            if [ -n "${{ inputs.usernames }}" ]; then
+              echo "USERNAMES_JSON='${{ inputs.usernames }}'" >> $GITHUB_ENV
+            else
+              echo "USERNAMES_JSON='[]'" >> $GITHUB_ENV
+            fi
+          fi
+
+          # Output for later steps
+          echo "test_mode=${TEST_MODE}" >> $GITHUB_OUTPUT
+          echo "usernames_json=${USERNAMES_JSON}" >> $GITHUB_OUTPUT
+
+      - name: Execute User Removal Script
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+          CALLBACK_TOKEN: ${{ secrets.CDCGOV_REPO_PAT }}
+          TEST_MODE: ${{ env.TEST_MODE }}
+          USERNAMES_JSON: ${{ env.USERNAMES_JSON }}
+        run: |
+          python scripts/remove_github_users.py
+
+      - name: Upload removal logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: removal-logs
+          path: |
+            github_removal_*.log
+            removal_results.json
+
+      - name: Notify cdcent/ocio-github-infra to update user lists
+        if: always() && steps.params.outputs.test_mode != 'true'
+        env:
+          CALLBACK_TOKEN: ${{ secrets.CDCGOV_REPO_PAT }}
+          TEST_MODE: ${{ env.TEST_MODE }}
+          USERNAMES_JSON: ${{ env.USERNAMES_JSON }}
+        run: |
+          # This is a fallback in case the callback in the Python script fails
+          echo "Sending callback to update user lists in cdcent/ocio-github-infra"
+
+          # Create payload
+          cat > callback_payload.json << EOF
+          {
+            "event_type": "update_user_lists",
+            "client_payload": {
+              "usernames": ${USERNAMES_JSON},
+              "test_mode": ${TEST_MODE},
+              "cdcgov_processed": true,
+              "job_status": "${{ job.status }}"
+            }
+          }
+          EOF
+
+          # Send repository dispatch
+          curl -X POST \
+            -H "Authorization: token ${CALLBACK_TOKEN}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/cdcent/ocio-github-infra/dispatches" \
+            -d @callback_payload.json
