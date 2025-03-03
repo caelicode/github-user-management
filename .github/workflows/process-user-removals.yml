@@ -91,7 +91,8 @@ jobs:
           TEST_MODE: ${{ env.TEST_MODE }}
           USERNAMES_JSON: ${{ env.USERNAMES_JSON }}
         run: |
-          python scripts/remove_github_users.py
+          export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${PWD}/scripts"
+          python scripts/main.py
 
       - name: Upload removal logs
         if: always()
