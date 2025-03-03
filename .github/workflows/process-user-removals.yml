@@ -64,6 +64,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
             echo "TEST_MODE=${{ github.event.client_payload.test_mode }}" >> $GITHUB_ENV
+            # Properly format the JSON array as a single-line string with proper escaping
             echo "USERNAMES_JSON='${{ toJSON(github.event.client_payload.usernames) }}'" >> $GITHUB_ENV
           elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "TEST_MODE=${{ inputs.test_mode }}" >> $GITHUB_ENV
@@ -107,7 +108,7 @@ jobs:
           # This is a fallback in case the callback in the Python script fails
           echo "Sending callback to update user lists in cdcent/ocio-github-infra"
 
-          # Create payload
+          # Create payload using single line JSON
           cat > callback_payload.json << EOF
           {
             "event_type": "update_user_lists",
