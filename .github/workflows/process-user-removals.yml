@@ -64,15 +64,19 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
             echo "TEST_MODE=${{ github.event.client_payload.test_mode }}" >> $GITHUB_ENV
-            # Properly format the JSON array as a single-line string with proper escaping
-            echo "USERNAMES_JSON='${{ toJSON(github.event.client_payload.usernames) }}'" >> $GITHUB_ENV
+
+            # Convert the JSON array to a properly formatted single-line string without quotes around it
+            FORMATTED_JSON=$(echo '${{ toJSON(github.event.client_payload.usernames) }}' | tr -d '\n')
+            echo "USERNAMES_JSON=${FORMATTED_JSON}" >> $GITHUB_ENV
+
           elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "TEST_MODE=${{ inputs.test_mode }}" >> $GITHUB_ENV
+
             # Use provided usernames or empty array if not provided
             if [ -n "${{ inputs.usernames }}" ]; then
-              echo "USERNAMES_JSON='${{ inputs.usernames }}'" >> $GITHUB_ENV
+              echo "USERNAMES_JSON=${{ inputs.usernames }}" >> $GITHUB_ENV
             else
-              echo "USERNAMES_JSON='[]'" >> $GITHUB_ENV
+              echo "USERNAMES_JSON=[]" >> $GITHUB_ENV
             fi
           fi
 
@@ -103,23 +107,26 @@ jobs:
         env:
           CALLBACK_TOKEN: ${{ secrets.CDCGOV_REPO_PAT }}
           TEST_MODE: ${{ env.TEST_MODE }}
-          USERNAMES_JSON: ${{ env.USERNAMES_JSON }}
         run: |
           # This is a fallback in case the callback in the Python script fails
           echo "Sending callback to update user lists in cdcent/ocio-github-infra"
 
-          # Create payload using single line JSON
+          # Create payload using the environment variable directly
           cat > callback_payload.json << EOF
           {
             "event_type": "update_user_lists",
             "client_payload": {
-              "usernames": ${USERNAMES_JSON},
-              "test_mode": ${TEST_MODE},
+              "usernames": $USERNAMES_JSON,
+              "test_mode": $TEST_MODE,
               "cdcgov_processed": true,
               "job_status": "${{ job.status }}"
             }
           }
           EOF
+
+          # Log the payload content for debugging
+          echo "Payload content:"
+          cat callback_payload.json
 
           # Send repository dispatch
           curl -X POST \
