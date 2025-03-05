@@ -102,36 +102,3 @@ jobs:
           path: |
             github_removal_*.log
             removal_results.json
-
-      - name: Notify cdcent/ocio-github-infra to update user lists
-        if: always() && steps.params.outputs.test_mode != 'true'
-        env:
-          CALLBACK_TOKEN: ${{ secrets.CDCGOV_REPO_PAT }}
-          TEST_MODE: ${{ env.TEST_MODE }}
-        run: |
-          # This is a fallback in case the callback in the Python script fails
-          echo "Sending callback to update user lists in cdcent/ocio-github-infra"
-
-          # Create payload using the environment variable directly
-          cat > callback_payload.json << EOF
-          {
-            "event_type": "update_user_lists",
-            "client_payload": {
-              "usernames": $USERNAMES_JSON,
-              "test_mode": $TEST_MODE,
-              "cdcgov_processed": true,
-              "job_status": "${{ job.status }}"
-            }
-          }
-          EOF
-
-          # Log the payload content for debugging
-          echo "Payload content:"
-          cat callback_payload.json
-
-          # Send repository dispatch
-          curl -X POST \
-            -H "Authorization: token ${CALLBACK_TOKEN}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/cdcent/ocio-github-infra/dispatches" \
-            -d @callback_payload.json
