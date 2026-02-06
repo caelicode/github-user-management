@@ -1,0 +1,3 @@
+organization:
+  name: test-org
+  default_member_role: member

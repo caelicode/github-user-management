@@ -1,0 +1,25 @@
+repositories:
+  api-service:
+    description: "Main API service"
+    visibility: public
+    default_branch: main
+    features:
+      has_issues: true
+      has_wiki: false
+      has_projects: false
+    branch_protection:
+      main:
+        required_reviews: 1
+        dismiss_stale_reviews: true
+        require_status_checks: false
+        required_status_contexts: []
+        enforce_admins: false
+
+  shared-lib:
+    description: "Shared utilities"
+    visibility: public
+    default_branch: main
+
+  infra:
+    description: "Infrastructure configs"
+    visibility: private

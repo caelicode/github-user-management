@@ -1,0 +1,7 @@
+members:
+  - username: alice
+    role: admin
+  - username: bob
+    role: member
+  - username: charlie
+    role: member

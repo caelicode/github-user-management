@@ -1,0 +1,85 @@
+name: Plan — Preview Org Changes
+
+on:
+  pull_request:
+    paths:
+      - 'config/**'
+      - 'schemas/**'
+      - 'scripts/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    name: Generate sync plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyyaml jsonschema requests
+
+      - name: Validate config
+        run: |
+          export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${PWD}/scripts"
+          python scripts/plan.py --validate-only
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.ORG_MANAGER_APP_ID }}
+          private-key: ${{ secrets.ORG_MANAGER_PRIVATE_KEY }}
+          owner: caelicode
+
+      - name: Generate plan
+        id: plan
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${PWD}/scripts"
+          python scripts/plan.py --format=markdown --output=plan_output.md
+          echo "plan_generated=true" >> $GITHUB_OUTPUT
+
+      - name: Post plan as PR comment
+        if: steps.plan.outputs.plan_generated == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('plan_output.md', 'utf8');
+            const marker = '<!-- org-sync-plan -->';
+
+            // Find existing comment to update
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c => c.body.includes(marker));
+            const body = `${marker}\n${plan}`;
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

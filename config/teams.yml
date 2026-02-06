@@ -1,0 +1,31 @@
+# Team definitions with membership and repository access
+# Edit this file and merge to main to sync teams.
+#
+# Team privacy:
+#   closed - Visible to all org members
+#   secret - Only visible to team members
+#
+# Member roles within a team:
+#   maintainer - Can manage team settings and membership
+#   member     - Standard team member
+#
+# Repository permissions:
+#   pull     - Read-only access
+#   triage   - Read + manage issues/PRs
+#   push     - Read + write access
+#   maintain - Push + manage repo (no admin)
+#   admin    - Full repository admin
+
+teams: {}
+  # Example:
+  # backend:
+  #   description: "Backend engineering team"
+  #   privacy: closed
+  #   members:
+  #     - username: alice
+  #       role: maintainer
+  #     - username: bob
+  #       role: member
+  #   repos:
+  #     api-service: push
+  #     shared-lib: pull

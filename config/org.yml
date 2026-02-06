@@ -1,0 +1,6 @@
+# Organization-level settings for caelicode
+# Edit this file to configure your GitHub organization
+
+organization:
+  name: caelicode
+  default_member_role: member

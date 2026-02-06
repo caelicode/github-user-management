@@ -1,0 +1,52 @@
+name: Apply — Sync Organization
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'config/**'
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    name: Sync organization
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyyaml jsonschema requests
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.ORG_MANAGER_APP_ID }}
+          private-key: ${{ secrets.ORG_MANAGER_PRIVATE_KEY }}
+          owner: caelicode
+
+      - name: Apply changes
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${PWD}/scripts"
+          python scripts/apply.py
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-results-${{ github.run_number }}
+          path: |
+            sync_results.json
+            sync_audit_*.jsonl
+            apply_*.log
+          retention-days: 90

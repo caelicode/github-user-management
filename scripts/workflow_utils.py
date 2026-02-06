@@ -6,7 +6,6 @@ import sys
 import logging
 
 def setup_workflow_logging():
-    """Configure logging for workflow scripts."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -14,15 +13,6 @@ def setup_workflow_logging():
     )
 
 def read_github_event():
-    """
-    Read and parse the GitHub event payload from GITHUB_EVENT_PATH.
-
-    Returns:
-        dict: The parsed event data
-
-    Raises:
-        SystemExit: If GITHUB_EVENT_PATH is not set or the file cannot be read
-    """
     event_path = os.environ.get('GITHUB_EVENT_PATH')
     if not event_path:
         logging.error("GITHUB_EVENT_PATH not found")
@@ -39,19 +29,6 @@ def read_github_event():
         sys.exit(1)
 
 def validate_dispatch_payload(event_data, required_fields=None):
-    """
-    Validate that a repository dispatch event contains required fields.
-
-    Args:
-        event_data (dict): The GitHub event data
-        required_fields (list): List of required fields in client_payload
-
-    Returns:
-        dict: The client_payload if validation passes
-
-    Raises:
-        SystemExit: If validation fails
-    """
     if required_fields is None:
         required_fields = ['usernames', 'test_mode']
 
@@ -71,23 +48,12 @@ def validate_dispatch_payload(event_data, required_fields=None):
     return client_payload
 
 def set_github_output(name, value):
-    """
-    Set a GitHub Actions output variable.
-    Works with both the legacy ::set-output and the new $GITHUB_OUTPUT file approach.
-
-    Args:
-        name (str): Name of the output variable
-        value (any): Value to set (will be converted to string or JSON)
-    """
-    # Convert value to JSON if it's not a string
     if not isinstance(value, str):
         value = json.dumps(value)
 
-    # Check if we're using the new output file approach
     github_output = os.environ.get('GITHUB_OUTPUT')
     if github_output:
         with open(github_output, 'a') as f:
             f.write(f"{name}={value}\n")
     else:
-        # Fall back to legacy ::set-output
         print(f"::set-output name={name}::{value}")

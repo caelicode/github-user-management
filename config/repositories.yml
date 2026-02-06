@@ -1,0 +1,29 @@
+# Repository settings and branch protection rules
+# Edit this file and merge to main to sync repository configurations.
+#
+# Note: Branch protection is only available on PUBLIC repositories
+# with the GitHub Free organization plan. Branch protection rules
+# for private repos will be skipped with a warning.
+#
+# Visibility:
+#   public  - Visible to everyone
+#   private - Only visible to org members with access
+
+repositories: {}
+  # Example:
+  # api-service:
+  #   description: "Main API service"
+  #   visibility: public
+  #   default_branch: main
+  #   features:
+  #     has_issues: true
+  #     has_wiki: false
+  #     has_projects: false
+  #   branch_protection:
+  #     main:
+  #       required_reviews: 1
+  #       dismiss_stale_reviews: true
+  #       require_status_checks: false
+  #       required_status_contexts: []
+  #       enforce_admins: false
+  #       restrict_pushes: false

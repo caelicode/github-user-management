@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Teams Configuration",
+  "type": "object",
+  "required": ["teams"],
+  "properties": {
+    "teams": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["description", "privacy"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Team description"
+          },
+          "privacy": {
+            "type": "string",
+            "enum": ["closed", "secret"],
+            "description": "Team visibility"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["username", "role"],
+              "properties": {
+                "username": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": ["maintainer", "member"]
+                }
+              },
+              "additionalProperties": false
+            },
+            "default": []
+          },
+          "repos": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "enum": ["pull", "triage", "push", "maintain", "admin"]
+            },
+            "default": {}
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

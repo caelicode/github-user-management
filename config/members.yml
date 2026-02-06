@@ -1,0 +1,15 @@
+# Organization members
+# Add or remove entries here and merge to main to sync.
+#
+# Roles:
+#   admin  - Full org admin access
+#   member - Standard member access
+#
+# Self-service: open a PR adding your username to join the org.
+
+members: []
+  # Example:
+  # - username: alice
+  #   role: admin
+  # - username: bob
+  #   role: member

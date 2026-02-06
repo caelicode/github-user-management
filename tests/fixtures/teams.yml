@@ -1,0 +1,21 @@
+teams:
+  backend:
+    description: "Backend engineering"
+    privacy: closed
+    members:
+      - username: alice
+        role: maintainer
+      - username: bob
+        role: member
+    repos:
+      api-service: push
+      shared-lib: pull
+
+  devops:
+    description: "Infrastructure team"
+    privacy: secret
+    members:
+      - username: alice
+        role: maintainer
+    repos:
+      infra: admin

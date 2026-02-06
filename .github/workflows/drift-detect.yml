@@ -1,0 +1,135 @@
+name: Drift Detection
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'  # Every 12 hours
+  workflow_dispatch:         # Manual trigger
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  detect-drift:
+    name: Check for configuration drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyyaml jsonschema requests
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.ORG_MANAGER_APP_ID }}
+          private-key: ${{ secrets.ORG_MANAGER_PRIVATE_KEY }}
+          owner: caelicode
+
+      - name: Run drift detection
+        id: drift
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${PWD}/scripts"
+          EXIT_CODE=0
+          python scripts/plan.py --format=drift --output=drift_report.md || EXIT_CODE=$?
+
+          if [ "$EXIT_CODE" -eq 2 ]; then
+            echo "drift_detected=true" >> $GITHUB_OUTPUT
+          elif [ "$EXIT_CODE" -eq 0 ]; then
+            echo "drift_detected=false" >> $GITHUB_OUTPUT
+          else
+            echo "Error running drift detection"
+            exit 1
+          fi
+
+          python scripts/plan.py --format=json --output=drift_report.json || true
+
+      - name: Create or update drift issue
+        if: steps.drift.outputs.drift_detected == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('drift_report.md', 'utf8');
+            const marker = '<!-- drift-detection -->';
+            const title = 'Drift Detected: Organization config out of sync';
+
+            // Check for existing open issue
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'drift-detected',
+            });
+
+            const existing = issues.find(i => i.title === title);
+            const body = `${marker}\n${report}`;
+
+            if (existing) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+              console.log(`Updated existing drift issue #${existing.number}`);
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['drift-detected'],
+              });
+              console.log('Created new drift issue');
+            }
+
+      - name: Close drift issue if no drift
+        if: steps.drift.outputs.drift_detected == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'Drift Detected: Organization config out of sync';
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'drift-detected',
+            });
+
+            const existing = issues.find(i => i.title === title);
+            if (existing) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                state: 'closed',
+                state_reason: 'completed',
+              });
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: 'Drift resolved — organization is back in sync with config.',
+              });
+              console.log(`Closed drift issue #${existing.number}`);
+            }
+
+      - name: Upload drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report-${{ github.run_number }}
+          path: |
+            drift_report.*
+            plan_*.log
+          retention-days: 30

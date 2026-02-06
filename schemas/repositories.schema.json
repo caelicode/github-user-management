@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Repositories Configuration",
+  "type": "object",
+  "required": ["repositories"],
+  "properties": {
+    "repositories": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "default": ""
+          },
+          "visibility": {
+            "type": "string",
+            "enum": ["public", "private"],
+            "default": "public"
+          },
+          "default_branch": {
+            "type": "string",
+            "default": "main"
+          },
+          "features": {
+            "type": "object",
+            "properties": {
+              "has_issues": { "type": "boolean", "default": true },
+              "has_wiki": { "type": "boolean", "default": false },
+              "has_projects": { "type": "boolean", "default": false }
+            },
+            "additionalProperties": false
+          },
+          "branch_protection": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "required_reviews": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 6,
+                  "default": 1
+                },
+                "dismiss_stale_reviews": { "type": "boolean", "default": true },
+                "require_status_checks": { "type": "boolean", "default": false },
+                "required_status_contexts": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "default": []
+                },
+                "enforce_admins": { "type": "boolean", "default": false },
+                "restrict_pushes": { "type": "boolean", "default": false }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

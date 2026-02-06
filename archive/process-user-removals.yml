@@ -21,6 +21,9 @@ permissions:
 jobs:
   remove-users-from-cdcgov:
     runs-on: ubuntu-latest
+    outputs:
+      completion_status: ${{ steps.set-outputs.outputs.completion_status }}
+      processed_usernames: ${{ steps.set-outputs.outputs.processed_usernames }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,6 +39,8 @@ jobs:
             echo "Payload: ${{ toJSON(github.event.client_payload) }}"
             echo "Test mode: ${{ github.event.client_payload.test_mode }}"
             echo "Usernames: ${{ toJSON(github.event.client_payload.usernames) }}"
+            echo "Callback repo: ${{ github.event.client_payload.callback_repo }}"
+            echo "Callback event: ${{ github.event.client_payload.callback_event }}"
           elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "Test mode: ${{ inputs.test_mode }}"
             echo "Usernames: ${{ inputs.usernames }}"
@@ -69,6 +74,14 @@ jobs:
             FORMATTED_JSON=$(echo '${{ toJSON(github.event.client_payload.usernames) }}' | tr -d '\n')
             echo "USERNAMES_JSON=${FORMATTED_JSON}" >> $GITHUB_ENV
 
+            # Set callback info if provided
+            if [ -n "${{ github.event.client_payload.callback_repo }}" ]; then
+              echo "CALLBACK_REPO=${{ github.event.client_payload.callback_repo }}" >> $GITHUB_ENV
+            fi
+            if [ -n "${{ github.event.client_payload.callback_event }}" ]; then
+              echo "CALLBACK_EVENT=${{ github.event.client_payload.callback_event }}" >> $GITHUB_ENV
+            fi
+
           elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "TEST_MODE=${{ inputs.test_mode }}" >> $GITHUB_ENV
 
@@ -80,19 +93,23 @@ jobs:
             fi
           fi
 
-          # Output for later steps
-          echo "test_mode=${TEST_MODE}" >> $GITHUB_OUTPUT
-          echo "usernames_json=${USERNAMES_JSON}" >> $GITHUB_OUTPUT
-
       - name: Execute User Removal Script
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
           CALLBACK_TOKEN: ${{ secrets.CDCGOV_REPO_PAT }}
           TEST_MODE: ${{ env.TEST_MODE }}
           USERNAMES_JSON: ${{ env.USERNAMES_JSON }}
+          CALLBACK_REPO: ${{ env.CALLBACK_REPO }}
+          CALLBACK_EVENT: ${{ env.CALLBACK_EVENT }}
         run: |
           export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${PWD}/scripts"
           python scripts/main.py
+
+      - name: Set outputs for callback
+        id: set-outputs
+        run: |
+          echo "completion_status=${{ job.status }}" >> $GITHUB_OUTPUT
+          echo "processed_usernames=${{ env.USERNAMES_JSON }}" >> $GITHUB_OUTPUT
 
       - name: Upload removal logs
         if: always()
@@ -102,3 +119,36 @@ jobs:
           path: |
             github_removal_*.log
             removal_results.json
+
+  send-completion-callback:
+    needs: remove-users-from-cdcgov
+    if: |
+      always() &&
+      github.event_name == 'repository_dispatch' &&
+      github.event.client_payload.callback_repo != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Send completion callback
+        env:
+          CALLBACK_TOKEN: ${{ secrets.CDCGOV_REPO_PAT }}
+        run: |
+          export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${PWD}/scripts"
+          python scripts/send_callback.py \
+            "${{ needs.remove-users-from-cdcgov.outputs.completion_status }}" \
+            "${{ github.event.client_payload.test_mode }}" \
+            "${{ needs.remove-users-from-cdcgov.outputs.processed_usernames }}"

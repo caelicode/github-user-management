@@ -1,0 +1,66 @@
+name: Manual Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run in dry-run mode (no actual changes)'
+        type: boolean
+        default: true
+      config_dir:
+        description: 'Config directory path (default: ./config/)'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Manual organization sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyyaml jsonschema requests
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.ORG_MANAGER_APP_ID }}
+          private-key: ${{ secrets.ORG_MANAGER_PRIVATE_KEY }}
+          owner: caelicode
+
+      - name: Run sync
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${PWD}/scripts"
+          ARGS=""
+          if [ "$DRY_RUN" = "true" ]; then
+            ARGS="--dry-run"
+          fi
+          if [ -n "${{ inputs.config_dir }}" ]; then
+            ARGS="$ARGS --config-dir=${{ inputs.config_dir }}"
+          fi
+          python scripts/apply.py $ARGS
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-sync-${{ github.run_number }}
+          path: |
+            sync_results.json
+            sync_audit_*.jsonl
+            apply_*.log
+          retention-days: 90
