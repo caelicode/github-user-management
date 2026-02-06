@@ -380,6 +380,32 @@ class Reconciler:
             logging.info("No changes to apply — organization is in sync.")
             return result
 
+        total_actions = len(plan.actions)
+        removal_actions = len(plan.removes)
+        if total_actions > 0 and removal_actions == total_actions and removal_actions >= 3:
+            logging.error(
+                f"SAFETY ABORT: Plan contains ONLY removals ({removal_actions} deletions, "
+                f"0 adds/updates). This looks like a misconfigured or empty config. "
+                f"Refusing to execute. Review your config files and try again."
+            )
+            result.failure_count = removal_actions
+            for action in plan.sorted_actions:
+                action.status = ActionStatus.FAILED
+                action.error = "Blocked by mass-deletion safety guard"
+            return result
+
+        if removal_actions > 5 and removal_actions > (total_actions * 0.7):
+            logging.error(
+                f"SAFETY ABORT: Plan would remove {removal_actions} of {total_actions} "
+                f"total actions (>{70}% are deletions). This is unusually destructive. "
+                f"Run manual-sync with --dry-run to review, then re-run if correct."
+            )
+            result.failure_count = total_actions
+            for action in plan.sorted_actions:
+                action.status = ActionStatus.FAILED
+                action.error = "Blocked by mass-deletion safety guard"
+            return result
+
         mode = "DRY RUN" if dry_run else "LIVE"
         logging.info(f"Applying plan ({mode}): {plan.summary}")
 

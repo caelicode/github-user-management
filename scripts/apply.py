@@ -49,6 +49,14 @@ def main() -> int:
             logging.error(f"  - {err}")
         return 1
 
+    if not desired_state.members and not desired_state.teams and not desired_state.repositories:
+        logging.error(
+            "SAFETY ABORT: Config is empty (0 members, 0 teams, 0 repositories). "
+            "This would delete everything in the organization. "
+            "If this is intentional, use manual-sync with --dry-run first."
+        )
+        return 1
+
     for w in warnings:
         logging.warning(f"  - {w}")
 
