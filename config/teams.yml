@@ -16,16 +16,79 @@
 #   maintain - Push + manage repo (no admin)
 #   admin    - Full repository admin
 
-teams: {}
-  # Example:
-  # backend:
-  #   description: "Backend engineering team"
-  #   privacy: closed
-  #   members:
-  #     - username: alice
-  #       role: maintainer
-  #     - username: bob
-  #       role: member
-  #   repos:
-  #     api-service: push
-  #     shared-lib: pull
+teams:
+  engineering:
+    description: "Core engineering team — cross-functional leads and architects"
+    privacy: closed
+    members:
+      - username: bertrandmbanwi
+        role: maintainer
+    repos:
+      github-user-management: push
+      status-page: push
+
+  devops:
+    description: "Infrastructure, CI/CD, and platform engineering"
+    privacy: closed
+    members:
+      - username: bertrandmbanwi
+        role: maintainer
+    repos:
+      github-user-management: admin
+      status-page: admin
+
+  frontend:
+    description: "Frontend development — UI, UX implementation, client-side"
+    privacy: closed
+    members:
+      - username: bertrandmbanwi
+        role: maintainer
+    repos:
+      status-page: push
+
+  backend:
+    description: "Backend development — APIs, services, data layer"
+    privacy: closed
+    members:
+      - username: bertrandmbanwi
+        role: maintainer
+    repos:
+      status-page: push
+
+  qa:
+    description: "Quality assurance — testing, automation, release validation"
+    privacy: closed
+    members:
+      - username: bertrandmbanwi
+        role: maintainer
+    repos:
+      status-page: pull
+
+  design:
+    description: "Design — UI/UX design, prototyping, design systems"
+    privacy: closed
+    members:
+      - username: bertrandmbanwi
+        role: maintainer
+    repos:
+      status-page: pull
+
+  docs:
+    description: "Documentation — technical writing, guides, API docs"
+    privacy: closed
+    members:
+      - username: bertrandmbanwi
+        role: maintainer
+    repos:
+      github-user-management: push
+      status-page: push
+
+  security:
+    description: "Security — code review, vulnerability management, compliance"
+    privacy: secret
+    members:
+      - username: bertrandmbanwi
+        role: maintainer
+    repos:
+      github-user-management: maintain
+      status-page: maintain

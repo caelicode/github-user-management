@@ -7,9 +7,6 @@
 #
 # Self-service: open a PR adding your username to join the org.
 
-members: []
-  # Example:
-  # - username: alice
-  #   role: admin
-  # - username: bob
-  #   role: member
+members:
+  - username: bertrandmbanwi
+    role: admin
