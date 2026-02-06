@@ -1,0 +1,139 @@
+name: Auto-Protect New Repositories
+
+# Automatically apply default branch protection to any new public repo
+# that isn't yet managed in config/repositories.yml.
+#
+# Runs every 6 hours and on manual trigger. Also fires when the
+# reconciler finishes (via workflow_run) to catch repos created
+# between scheduled runs.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Preview only — no changes'
+        required: false
+        type: boolean
+        default: false
+  workflow_run:
+    workflows: ["Sync Organization"]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  auto-protect:
+    name: Scan and protect new repositories
+    runs-on: ubuntu-latest
+    # Only run on workflow_run if the triggering workflow succeeded
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyyaml jsonschema requests
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.ORG_MANAGER_APP_ID }}
+          private-key: ${{ secrets.ORG_MANAGER_PRIVATE_KEY }}
+          owner: caelicode
+
+      - name: Auto-protect unmanaged repos
+        id: protect
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          ORG_NAME: caelicode
+        run: |
+          export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${PWD}/scripts"
+          EXIT_CODE=0
+          python scripts/auto_protect.py \
+            --config-dir config \
+            ${{ inputs.dry_run == true && '--dry-run' || '' }} \
+            || EXIT_CODE=$?
+
+          if [ "$EXIT_CODE" -eq 2 ]; then
+            echo "repos_protected=true" >> $GITHUB_OUTPUT
+          elif [ "$EXIT_CODE" -eq 0 ]; then
+            echo "repos_protected=false" >> $GITHUB_OUTPUT
+          else
+            echo "Error during auto-protection"
+            exit 1
+          fi
+
+      - name: Create issue for unmanaged repos
+        if: steps.protect.outputs.repos_protected == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- auto-protect-unmanaged -->';
+            const title = 'New repos detected — add to GitOps config';
+
+            // Check for existing open issue
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'auto-protected',
+            });
+
+            const existing = issues.find(i => i.title === title);
+            const body = [
+              marker,
+              '## New Repositories Auto-Protected',
+              '',
+              'Default branch protection (1 required review, dismiss stale reviews) was',
+              'automatically applied to new public repositories.',
+              '',
+              '**Action required:** Add these repos to `config/repositories.yml` to bring',
+              'them under full GitOps management. Until then, auto-protect will maintain',
+              'the default rules.',
+              '',
+              `_Last run: ${new Date().toISOString()}_`,
+            ].join('\n');
+
+            if (existing) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+              console.log(`Updated existing issue #${existing.number}`);
+            } else {
+              // Create label if it doesn't exist
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'auto-protected',
+                  color: '0e8a16',
+                  description: 'Repos auto-protected by the auto-protect workflow',
+                });
+              } catch (e) {
+                // Label might already exist
+              }
+
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['auto-protected'],
+              });
+              console.log('Created new auto-protect issue');
+            }

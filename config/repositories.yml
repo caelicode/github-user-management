@@ -41,3 +41,28 @@ repositories:
         require_status_checks: false
         required_status_contexts: []
         enforce_admins: false
+
+  soc-monitoring-stack:
+    description: "Containerized SOC monitoring stack with Grafana, Prometheus, Loki, and Alertmanager"
+    visibility: public
+    default_branch: main
+    features:
+      has_issues: true
+      has_wiki: false
+      has_projects: false
+    branch_protection:
+      main:
+        required_reviews: 1
+        dismiss_stale_reviews: true
+        require_status_checks: false
+        required_status_contexts: []
+        enforce_admins: false
+
+  secret-scanner:
+    description: "Enterprise secret scanning with Gitleaks & TruffleHog"
+    visibility: public
+    default_branch: main
+    features:
+      has_issues: true
+      has_wiki: false
+      has_projects: false
