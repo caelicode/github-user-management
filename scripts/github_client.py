@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""GitHub API client for organization management.
-
-Provides a comprehensive wrapper around the GitHub REST API for managing
-organization members, teams, repositories, and branch protection rules.
-Includes pagination, rate limiting, and retry logic.
-"""
 
 import logging
 import time
@@ -14,11 +8,10 @@ import requests
 
 
 class GitHubClient:
-    """GitHub API client with full org management capabilities."""
 
     BASE_URL = "https://api.github.com"
     MAX_RETRIES = 3
-    RETRY_BACKOFF = 2  # seconds, doubles each retry
+    RETRY_BACKOFF = 2
 
     def __init__(self, token: str):
         self.token = token
@@ -29,17 +22,12 @@ class GitHubClient:
             "X-GitHub-Api-Version": "2022-11-28",
         })
 
-    # ------------------------------------------------------------------ #
-    #  Infrastructure: pagination, retries, rate limiting                 #
-    # ------------------------------------------------------------------ #
-
     def _request_with_retry(
         self,
         method: str,
         url: str,
         **kwargs,
     ) -> requests.Response:
-        """Make an API request with retry logic for transient failures."""
         if not url.startswith("http"):
             url = f"{self.BASE_URL}{url}"
 
@@ -48,14 +36,12 @@ class GitHubClient:
             try:
                 response = self.session.request(method, url, **kwargs)
 
-                # Rate limited — wait and retry
                 if response.status_code == 429:
                     retry_after = int(response.headers.get("Retry-After", 60))
                     logging.warning(f"Rate limited. Waiting {retry_after}s...")
                     time.sleep(retry_after)
                     continue
 
-                # Server error — retry with backoff
                 if response.status_code >= 500:
                     wait = self.RETRY_BACKOFF * (2 ** attempt)
                     logging.warning(
@@ -73,13 +59,11 @@ class GitHubClient:
                 logging.warning(f"Request failed: {e}. Retrying in {wait}s...")
                 time.sleep(wait)
 
-        # All retries exhausted
         if last_exception:
             raise last_exception
-        return response  # Return last response even if it was an error
+        return response
 
     def _paginated_get(self, url: str, params: dict = None) -> list[dict]:
-        """Fetch all pages of a paginated API endpoint."""
         if params is None:
             params = {}
         params.setdefault("per_page", 100)
@@ -99,10 +83,9 @@ class GitHubClient:
             else:
                 break
 
-            # Parse Link header for next page
             link_header = response.headers.get("Link", "")
             url = None
-            params = {}  # params are embedded in the next URL
+            params = {}
             for part in link_header.split(","):
                 if 'rel="next"' in part:
                     url = part.split(";")[0].strip().strip("<>")
@@ -111,7 +94,6 @@ class GitHubClient:
         return all_items
 
     def _extract_error(self, response: requests.Response) -> str:
-        """Extract error message from API response."""
         try:
             data = response.json()
             msg = data.get("message", "")
@@ -126,7 +108,6 @@ class GitHubClient:
             return response.text[:200] if response.text else f"HTTP {response.status_code}"
 
     def get_rate_limit(self) -> dict:
-        """Check current rate limit status."""
         response = self._request_with_retry("GET", "/rate_limit")
         if response.status_code == 200:
             data = response.json()
@@ -138,17 +119,11 @@ class GitHubClient:
             return core
         return {}
 
-    # ------------------------------------------------------------------ #
-    #  Organization Members                                               #
-    # ------------------------------------------------------------------ #
-
     def list_org_members(self, org: str) -> list[dict]:
-        """List all organization members with their roles."""
         members = self._paginated_get(f"/orgs/{org}/members")
         result = []
         for member in members:
             username = member.get("login", "")
-            # Need a separate call to get role (admin vs member)
             role = self._get_member_role(org, username)
             result.append({
                 "username": username,
@@ -158,7 +133,6 @@ class GitHubClient:
         return result
 
     def _get_member_role(self, org: str, username: str) -> str:
-        """Get a member's role in the organization."""
         response = self._request_with_retry(
             "GET", f"/orgs/{org}/memberships/{username}"
         )
@@ -167,7 +141,6 @@ class GitHubClient:
         return "member"
 
     def check_user_membership(self, org: str, username: str) -> tuple[bool, Optional[str]]:
-        """Check if a user is a member of the organization."""
         response = self._request_with_retry(
             "GET", f"/orgs/{org}/members/{username}"
         )
@@ -183,7 +156,6 @@ class GitHubClient:
     def invite_member(
         self, org: str, username: str, role: str = "member"
     ) -> tuple[bool, str]:
-        """Invite a user to the organization or update their role."""
         response = self._request_with_retry(
             "PUT",
             f"/orgs/{org}/memberships/{username}",
@@ -198,7 +170,6 @@ class GitHubClient:
             return False, self._extract_error(response)
 
     def remove_member(self, org: str, username: str) -> tuple[bool, str]:
-        """Remove a user from the organization."""
         response = self._request_with_retry(
             "DELETE", f"/orgs/{org}/members/{username}"
         )
@@ -209,16 +180,10 @@ class GitHubClient:
         else:
             return False, self._extract_error(response)
 
-    # ------------------------------------------------------------------ #
-    #  Teams                                                              #
-    # ------------------------------------------------------------------ #
-
     def list_teams(self, org: str) -> list[dict]:
-        """List all teams in the organization."""
         return self._paginated_get(f"/orgs/{org}/teams")
 
     def get_team_by_slug(self, org: str, slug: str) -> Optional[dict]:
-        """Get a team by its slug."""
         response = self._request_with_retry(
             "GET", f"/orgs/{org}/teams/{slug}"
         )
@@ -233,7 +198,6 @@ class GitHubClient:
         description: str = "",
         privacy: str = "closed",
     ) -> tuple[bool, str]:
-        """Create a new team."""
         response = self._request_with_retry(
             "POST",
             f"/orgs/{org}/teams",
@@ -259,7 +223,6 @@ class GitHubClient:
         description: Optional[str] = None,
         privacy: Optional[str] = None,
     ) -> tuple[bool, str]:
-        """Update team settings."""
         payload: dict[str, Any] = {}
         if name is not None:
             payload["name"] = name
@@ -280,7 +243,6 @@ class GitHubClient:
             return False, self._extract_error(response)
 
     def delete_team(self, org: str, team_slug: str) -> tuple[bool, str]:
-        """Delete a team."""
         response = self._request_with_retry(
             "DELETE", f"/orgs/{org}/teams/{team_slug}"
         )
@@ -291,17 +253,11 @@ class GitHubClient:
         else:
             return False, self._extract_error(response)
 
-    # ------------------------------------------------------------------ #
-    #  Team Membership                                                    #
-    # ------------------------------------------------------------------ #
-
     def list_team_members(self, org: str, team_slug: str) -> list[dict]:
-        """List all members of a team with their roles."""
         members = self._paginated_get(f"/orgs/{org}/teams/{team_slug}/members")
         result = []
         for member in members:
             username = member.get("login", "")
-            # Get team-specific role
             role_response = self._request_with_retry(
                 "GET",
                 f"/orgs/{org}/teams/{team_slug}/memberships/{username}",
@@ -319,7 +275,6 @@ class GitHubClient:
         username: str,
         role: str = "member",
     ) -> tuple[bool, str]:
-        """Add a user to a team or update their team role."""
         response = self._request_with_retry(
             "PUT",
             f"/orgs/{org}/teams/{team_slug}/memberships/{username}",
@@ -334,7 +289,6 @@ class GitHubClient:
     def remove_team_member(
         self, org: str, team_slug: str, username: str
     ) -> tuple[bool, str]:
-        """Remove a user from a team."""
         response = self._request_with_retry(
             "DELETE",
             f"/orgs/{org}/teams/{team_slug}/memberships/{username}",
@@ -346,17 +300,11 @@ class GitHubClient:
         else:
             return False, self._extract_error(response)
 
-    # ------------------------------------------------------------------ #
-    #  Team ↔ Repository Permissions                                      #
-    # ------------------------------------------------------------------ #
-
     def list_team_repos(self, org: str, team_slug: str) -> list[dict]:
-        """List repositories a team has access to, with permission levels."""
         repos = self._paginated_get(f"/orgs/{org}/teams/{team_slug}/repos")
         result = []
         for repo in repos:
             permissions = repo.get("permissions", {})
-            # Determine effective permission level
             perm = "pull"
             if permissions.get("admin"):
                 perm = "admin"
@@ -381,7 +329,6 @@ class GitHubClient:
         repo_name: str,
         permission: str = "push",
     ) -> tuple[bool, str]:
-        """Add a repository to a team with a specific permission level."""
         response = self._request_with_retry(
             "PUT",
             f"/orgs/{org}/teams/{team_slug}/repos/{org}/{repo_name}",
@@ -395,7 +342,6 @@ class GitHubClient:
     def remove_team_repo(
         self, org: str, team_slug: str, repo_name: str
     ) -> tuple[bool, str]:
-        """Remove a repository from a team."""
         response = self._request_with_retry(
             "DELETE",
             f"/orgs/{org}/teams/{team_slug}/repos/{org}/{repo_name}",
@@ -407,16 +353,10 @@ class GitHubClient:
         else:
             return False, self._extract_error(response)
 
-    # ------------------------------------------------------------------ #
-    #  Repositories                                                       #
-    # ------------------------------------------------------------------ #
-
     def list_org_repos(self, org: str) -> list[dict]:
-        """List all repositories in the organization."""
         return self._paginated_get(f"/orgs/{org}/repos", {"type": "all"})
 
     def get_repo(self, owner: str, repo: str) -> Optional[dict]:
-        """Get repository details."""
         response = self._request_with_retry(
             "GET", f"/repos/{owner}/{repo}"
         )
@@ -430,7 +370,6 @@ class GitHubClient:
         repo: str,
         settings: dict,
     ) -> tuple[bool, str]:
-        """Update repository settings."""
         response = self._request_with_retry(
             "PATCH", f"/repos/{owner}/{repo}", json=settings
         )
@@ -439,14 +378,9 @@ class GitHubClient:
         else:
             return False, self._extract_error(response)
 
-    # ------------------------------------------------------------------ #
-    #  Branch Protection (public repos only on free plan)                  #
-    # ------------------------------------------------------------------ #
-
     def get_branch_protection(
         self, owner: str, repo: str, branch: str
     ) -> Optional[dict]:
-        """Get branch protection rules for a branch."""
         response = self._request_with_retry(
             "GET", f"/repos/{owner}/{repo}/branches/{branch}/protection"
         )
@@ -461,7 +395,6 @@ class GitHubClient:
         branch: str,
         rules: dict,
     ) -> tuple[bool, str]:
-        """Set branch protection rules."""
         response = self._request_with_retry(
             "PUT",
             f"/repos/{owner}/{repo}/branches/{branch}/protection",
@@ -479,7 +412,6 @@ class GitHubClient:
     def delete_branch_protection(
         self, owner: str, repo: str, branch: str
     ) -> tuple[bool, str]:
-        """Remove branch protection from a branch."""
         response = self._request_with_retry(
             "DELETE",
             f"/repos/{owner}/{repo}/branches/{branch}/protection",
@@ -491,10 +423,6 @@ class GitHubClient:
         else:
             return False, self._extract_error(response)
 
-    # ------------------------------------------------------------------ #
-    #  Repository Dispatch (kept for backward compatibility)               #
-    # ------------------------------------------------------------------ #
-
     def send_repository_dispatch(
         self,
         owner: str,
@@ -503,7 +431,6 @@ class GitHubClient:
         client_payload: dict,
         token: Optional[str] = None,
     ) -> bool:
-        """Send a repository dispatch event."""
         url = f"{self.BASE_URL}/repos/{owner}/{repo}/dispatches"
         headers = dict(self.session.headers)
         if token:

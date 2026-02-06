@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""Output formatters for sync plans, dashboards, and diagrams.
-
-Generates markdown for PR comments, Mermaid diagrams for org structure
-visualization, terminal output with symbols, and README dashboard content.
-"""
 
 from datetime import datetime
 from typing import Optional
@@ -17,12 +12,7 @@ from models import (
 )
 
 
-# ------------------------------------------------------------------ #
-#  PR Plan Comment (Terraform-style)                                  #
-# ------------------------------------------------------------------ #
-
 def format_plan_markdown(plan: SyncPlan) -> str:
-    """Format a sync plan as a GitHub PR comment in markdown."""
     lines = []
     lines.append("## Organization Sync Plan")
     lines.append("")
@@ -44,7 +34,6 @@ def format_plan_markdown(plan: SyncPlan) -> str:
     lines.append(f"**{plan.summary}**")
     lines.append("")
 
-    # Group actions by category
     categories = {
         "Members": [ActionType.MEMBER_INVITE, ActionType.MEMBER_REMOVE, ActionType.MEMBER_UPDATE_ROLE],
         "Teams": [ActionType.TEAM_CREATE, ActionType.TEAM_UPDATE, ActionType.TEAM_DELETE],
@@ -84,12 +73,7 @@ def format_plan_markdown(plan: SyncPlan) -> str:
     return "\n".join(lines)
 
 
-# ------------------------------------------------------------------ #
-#  Terminal Output                                                    #
-# ------------------------------------------------------------------ #
-
 def format_plan_terminal(plan: SyncPlan) -> str:
-    """Format a sync plan for terminal output."""
     lines = []
     lines.append("=" * 60)
     lines.append("  Organization Sync Plan")
@@ -125,12 +109,7 @@ def format_plan_terminal(plan: SyncPlan) -> str:
     return "\n".join(lines)
 
 
-# ------------------------------------------------------------------ #
-#  Sync Result Output                                                 #
-# ------------------------------------------------------------------ #
-
 def format_result_terminal(result: SyncResult) -> str:
-    """Format sync results for terminal output."""
     lines = []
     mode = "DRY RUN" if result.dry_run else "LIVE"
     lines.append(f"=== Sync Result ({mode}) ===")
@@ -150,12 +129,7 @@ def format_result_terminal(result: SyncResult) -> str:
     return "\n".join(lines)
 
 
-# ------------------------------------------------------------------ #
-#  Mermaid Org Diagram                                                #
-# ------------------------------------------------------------------ #
-
 def format_mermaid_diagram(state: OrgState) -> str:
-    """Generate a Mermaid flowchart of the org structure."""
     lines = []
     lines.append("```mermaid")
     lines.append("graph TD")
@@ -163,17 +137,14 @@ def format_mermaid_diagram(state: OrgState) -> str:
     org_id = "ORG"
     lines.append(f'    {org_id}["{state.org_name}"]')
 
-    # Teams
     for i, team in enumerate(state.teams):
         team_id = f"T{i}"
         lines.append(f'    {org_id} --> {team_id}["{team.name}"]')
 
-        # Team → Repo edges
         for j, (repo_name, perm) in enumerate(team.repos.items()):
             repo_id = _repo_id(repo_name, state)
             lines.append(f'    {team_id} -->|{perm.value}| {repo_id}["{repo_name}"]')
 
-        # Team → Member edges
         for member in team.members:
             member_id = _member_id(member.username)
             lines.append(
@@ -185,7 +156,6 @@ def format_mermaid_diagram(state: OrgState) -> str:
 
 
 def _repo_id(name: str, state: OrgState) -> str:
-    """Generate a unique Mermaid node ID for a repo."""
     repos = [r.name for r in state.repositories]
     try:
         idx = repos.index(name)
@@ -195,16 +165,10 @@ def _repo_id(name: str, state: OrgState) -> str:
 
 
 def _member_id(username: str) -> str:
-    """Generate a unique Mermaid node ID for a member."""
     return f"U_{username.replace('-', '_')}"
 
 
-# ------------------------------------------------------------------ #
-#  README Dashboard                                                   #
-# ------------------------------------------------------------------ #
-
 def format_dashboard(state: OrgState, findings: list[SecurityFinding] = None) -> str:
-    """Generate a dashboard section for the README."""
     lines = []
     lines.append("## Organization Dashboard")
     lines.append("")
@@ -212,7 +176,6 @@ def format_dashboard(state: OrgState, findings: list[SecurityFinding] = None) ->
     lines.append(f"*Last synced: {now}*")
     lines.append("")
 
-    # Stats
     lines.append("| Metric | Count |")
     lines.append("|--------|-------|")
     lines.append(f"| Members | {len(state.members)} |")
@@ -222,7 +185,6 @@ def format_dashboard(state: OrgState, findings: list[SecurityFinding] = None) ->
     lines.append(f"| Admins | {admin_count} |")
     lines.append("")
 
-    # Team summary
     if state.teams:
         lines.append("### Teams")
         lines.append("")
@@ -235,7 +197,6 @@ def format_dashboard(state: OrgState, findings: list[SecurityFinding] = None) ->
             )
         lines.append("")
 
-    # Security findings
     if findings:
         high = [f for f in findings if f.severity == "high"]
         if high:
@@ -245,7 +206,6 @@ def format_dashboard(state: OrgState, findings: list[SecurityFinding] = None) ->
                 lines.append(f"- **{f.resource}**: {f.message}")
             lines.append("")
 
-    # Mermaid diagram
     lines.append("### Structure")
     lines.append("")
     lines.append(format_mermaid_diagram(state))
@@ -253,12 +213,7 @@ def format_dashboard(state: OrgState, findings: list[SecurityFinding] = None) ->
     return "\n".join(lines)
 
 
-# ------------------------------------------------------------------ #
-#  Drift Detection Report                                             #
-# ------------------------------------------------------------------ #
-
 def format_drift_report(plan: SyncPlan, findings: list[SecurityFinding] = None) -> str:
-    """Format a drift detection report for a GitHub issue."""
     lines = []
     lines.append("## Drift Detection Report")
     lines.append("")
@@ -304,12 +259,7 @@ def format_drift_report(plan: SyncPlan, findings: list[SecurityFinding] = None) 
     return "\n".join(lines)
 
 
-# ------------------------------------------------------------------ #
-#  GitHub Actions Step Summary                                        #
-# ------------------------------------------------------------------ #
-
 def format_step_summary(result: SyncResult) -> str:
-    """Format a summary for GitHub Actions step summary."""
     lines = []
     mode = "Dry Run" if result.dry_run else "Live"
     status = "Success" if result.success else "Failed"

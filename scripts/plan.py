@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-"""Plan entry point — dry-run that shows what would change.
-
-Loads config, fetches current GitHub state, generates a diff,
-and outputs the plan in the requested format. No changes are made.
-
-Exit codes:
-  0 — No changes needed (org is in sync)
-  1 — Error (validation failure, API error, etc.)
-  2 — Changes detected (plan has actions)
-"""
 
 import argparse
 import json
@@ -58,7 +48,6 @@ def main() -> int:
 
     setup_logging("plan")
 
-    # Load config
     logging.info("Loading configuration...")
     desired_state, errors, warnings = load_config(
         config_dir=args.config_dir, validate=True
@@ -86,7 +75,6 @@ def main() -> int:
             logging.info(f"  {len(warnings)} warning(s)")
         return 0
 
-    # Fetch current state
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
         logging.error("GITHUB_TOKEN environment variable not set")
@@ -98,12 +86,10 @@ def main() -> int:
     logging.info("Fetching current state from GitHub...")
     current_state = reconciler.fetch_current_state()
 
-    # Generate diff
     logging.info("Generating plan...")
     plan = reconciler.diff(desired_state, current_state)
     plan.warnings.extend(warnings)
 
-    # Output
     _output(plan, args)
 
     if plan.has_changes:
@@ -112,7 +98,6 @@ def main() -> int:
 
 
 def _output(plan: SyncPlan, args) -> None:
-    """Format and output the plan."""
     formatters = {
         "terminal": format_plan_terminal,
         "markdown": format_plan_markdown,
@@ -130,7 +115,6 @@ def _output(plan: SyncPlan, args) -> None:
     else:
         print(output)
 
-    # Also write to GITHUB_STEP_SUMMARY if available
     summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_file:
         md_output = format_plan_markdown(plan)

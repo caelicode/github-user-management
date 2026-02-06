@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""Reconciliation engine for GitHub organization management.
-
-Compares desired state (from config files) against actual state (from GitHub API)
-and produces an ordered plan of actions to bring the org into alignment.
-All operations are idempotent — safe to re-run.
-"""
 
 import logging
 from typing import Optional
@@ -32,23 +26,16 @@ from models import (
 
 
 class Reconciler:
-    """Compares desired and actual org state, generates and executes sync plans."""
 
     def __init__(self, client: GitHubClient, org_name: str):
         self.client = client
         self.org_name = org_name
 
-    # ------------------------------------------------------------------ #
-    #  Fetch current state from GitHub                                    #
-    # ------------------------------------------------------------------ #
-
     def fetch_current_state(self) -> OrgState:
-        """Query GitHub API to build the actual current state of the org."""
         logging.info(f"Fetching current state of '{self.org_name}' from GitHub...")
 
         state = OrgState(org_name=self.org_name)
 
-        # Members
         logging.info("  Fetching members...")
         raw_members = self.client.list_org_members(self.org_name)
         for m in raw_members:
@@ -58,7 +45,6 @@ class Reconciler:
             ))
         logging.info(f"  Found {len(state.members)} members")
 
-        # Teams
         logging.info("  Fetching teams...")
         raw_teams = self.client.list_teams(self.org_name)
         for t in raw_teams:
@@ -70,7 +56,6 @@ class Reconciler:
                 privacy=TeamPrivacy(t.get("privacy", "closed")),
             )
 
-            # Team members
             raw_team_members = self.client.list_team_members(self.org_name, slug)
             for tm in raw_team_members:
                 team.members.append(TeamMember(
@@ -78,7 +63,6 @@ class Reconciler:
                     role=TeamMemberRole(tm.get("role", "member")),
                 ))
 
-            # Team repos
             raw_team_repos = self.client.list_team_repos(self.org_name, slug)
             for tr in raw_team_repos:
                 team.repos[tr["name"]] = RepoPermission(tr["permission"])
@@ -86,7 +70,6 @@ class Reconciler:
             state.teams.append(team)
         logging.info(f"  Found {len(state.teams)} teams")
 
-        # Repositories
         logging.info("  Fetching repositories...")
         raw_repos = self.client.list_org_repos(self.org_name)
         for r in raw_repos:
@@ -102,7 +85,6 @@ class Reconciler:
                 has_projects=r.get("has_projects", False),
             )
 
-            # Branch protection (only for public repos on free plan)
             if repo.visibility == RepoVisibility.PUBLIC:
                 bp = self.client.get_branch_protection(
                     self.org_name, repo.name, repo.default_branch
@@ -130,12 +112,7 @@ class Reconciler:
 
         return state
 
-    # ------------------------------------------------------------------ #
-    #  Generate diff / sync plan                                          #
-    # ------------------------------------------------------------------ #
-
     def diff(self, desired: OrgState, current: OrgState) -> SyncPlan:
-        """Compare desired and current state, produce an ordered action plan."""
         plan = SyncPlan(org_name=self.org_name)
 
         self._diff_members(desired, current, plan)
@@ -150,11 +127,9 @@ class Reconciler:
     def _diff_members(
         self, desired: OrgState, current: OrgState, plan: SyncPlan
     ):
-        """Diff org members — add, remove, or update roles."""
         desired_map = {m.username: m for m in desired.members}
         current_map = {m.username: m for m in current.members}
 
-        # Members to add
         for username, member in desired_map.items():
             if username not in current_map:
                 plan.actions.append(SyncAction(
@@ -164,7 +139,6 @@ class Reconciler:
                     priority=1,
                 ))
 
-        # Members to remove
         for username in current_map:
             if username not in desired_map:
                 plan.actions.append(SyncAction(
@@ -173,7 +147,6 @@ class Reconciler:
                     priority=7,
                 ))
 
-        # Members with role changes
         for username, member in desired_map.items():
             if username in current_map:
                 current_role = current_map[username].role
@@ -191,11 +164,9 @@ class Reconciler:
     def _diff_teams(
         self, desired: OrgState, current: OrgState, plan: SyncPlan
     ):
-        """Diff teams — create, update, or delete."""
         desired_slugs = {t.slug: t for t in desired.teams}
         current_slugs = {t.slug: t for t in current.teams}
 
-        # Teams to create
         for slug, team in desired_slugs.items():
             if slug not in current_slugs:
                 plan.actions.append(SyncAction(
@@ -208,7 +179,6 @@ class Reconciler:
                     priority=2,
                 ))
 
-        # Teams to delete
         for slug, team in current_slugs.items():
             if slug not in desired_slugs:
                 plan.actions.append(SyncAction(
@@ -222,7 +192,6 @@ class Reconciler:
                     f"This removes all team permissions."
                 )
 
-        # Teams to update (description or privacy changed)
         for slug, team in desired_slugs.items():
             if slug in current_slugs:
                 current_team = current_slugs[slug]
@@ -248,14 +217,12 @@ class Reconciler:
     def _diff_team_memberships(
         self, desired: OrgState, current: OrgState, plan: SyncPlan
     ):
-        """Diff team memberships — add, remove, or update roles within teams."""
         desired_slugs = {t.slug: t for t in desired.teams}
         current_slugs = {t.slug: t for t in current.teams}
 
         for slug, desired_team in desired_slugs.items():
             desired_members = {m.username: m for m in desired_team.members}
 
-            # For existing teams, compare membership
             if slug in current_slugs:
                 current_members = {
                     m.username: m for m in current_slugs[slug].members
@@ -263,7 +230,6 @@ class Reconciler:
             else:
                 current_members = {}
 
-            # Members to add to team
             for username, member in desired_members.items():
                 if username not in current_members:
                     plan.actions.append(SyncAction(
@@ -277,7 +243,6 @@ class Reconciler:
                         priority=3,
                     ))
 
-            # Members to remove from team
             for username in current_members:
                 if username not in desired_members:
                     plan.actions.append(SyncAction(
@@ -290,7 +255,6 @@ class Reconciler:
                         priority=3,
                     ))
 
-            # Members with role changes
             for username, member in desired_members.items():
                 if username in current_members:
                     current_role = current_members[username].role
@@ -310,7 +274,6 @@ class Reconciler:
     def _diff_team_repos(
         self, desired: OrgState, current: OrgState, plan: SyncPlan
     ):
-        """Diff team-repository permissions."""
         desired_slugs = {t.slug: t for t in desired.teams}
         current_slugs = {t.slug: t for t in current.teams}
 
@@ -322,7 +285,6 @@ class Reconciler:
             else:
                 current_repos = {}
 
-            # Repos to add to team
             for repo_name, perm in desired_repos.items():
                 if repo_name not in current_repos:
                     plan.actions.append(SyncAction(
@@ -348,7 +310,6 @@ class Reconciler:
                         priority=4,
                     ))
 
-            # Repos to remove from team
             for repo_name in current_repos:
                 if repo_name not in desired_repos:
                     plan.actions.append(SyncAction(
@@ -364,7 +325,6 @@ class Reconciler:
     def _diff_branch_protection(
         self, desired: OrgState, current: OrgState, plan: SyncPlan
     ):
-        """Diff branch protection rules (public repos only)."""
         for desired_repo in desired.repositories:
             if desired_repo.visibility != RepoVisibility.PUBLIC:
                 if desired_repo.branch_protection:
@@ -404,7 +364,6 @@ class Reconciler:
                         ))
 
     def _bp_differs(self, a: BranchProtection, b: BranchProtection) -> bool:
-        """Check if two branch protection configs differ."""
         return (
             a.required_reviews != b.required_reviews
             or a.dismiss_stale_reviews != b.dismiss_stale_reviews
@@ -414,16 +373,7 @@ class Reconciler:
             or set(a.required_status_contexts) != set(b.required_status_contexts)
         )
 
-    # ------------------------------------------------------------------ #
-    #  Execute a sync plan                                                #
-    # ------------------------------------------------------------------ #
-
     def apply(self, plan: SyncPlan, dry_run: bool = False) -> SyncResult:
-        """Execute all actions in a sync plan.
-
-        Actions are executed in priority order. Individual failures
-        don't stop the overall process — each action is logged.
-        """
         result = SyncResult(plan=plan, dry_run=dry_run)
 
         if not plan.has_changes:
@@ -469,7 +419,6 @@ class Reconciler:
         return result
 
     def _execute_action(self, action: SyncAction) -> tuple[bool, str]:
-        """Execute a single sync action against the GitHub API."""
         org = self.org_name
         d = action.details
 
@@ -527,7 +476,6 @@ class Reconciler:
         return False, f"Unknown action type: {action.action_type}"
 
     def _apply_branch_protection(self, action: SyncAction) -> tuple[bool, str]:
-        """Apply branch protection rules from action details."""
         rules = action.details.get("rules", {})
         bp = BranchProtection(
             branch=rules.get("branch", action.details.get("branch", "main")),
@@ -541,15 +489,9 @@ class Reconciler:
             self.org_name, action.resource, bp.branch, bp.to_api_payload()
         )
 
-    # ------------------------------------------------------------------ #
-    #  Security Audit                                                     #
-    # ------------------------------------------------------------------ #
-
     def security_audit(self, current: OrgState) -> list[SecurityFinding]:
-        """Run security checks against the current org state."""
         findings = []
 
-        # Check for excessive admin count
         admins = [m for m in current.members if m.role == MemberRole.ADMIN]
         if len(admins) > max(2, len(current.members) // 3):
             findings.append(SecurityFinding(
@@ -562,7 +504,6 @@ class Reconciler:
                 ),
             ))
 
-        # Check for public repos without branch protection
         for repo in current.repositories:
             if repo.visibility == RepoVisibility.PUBLIC:
                 if not repo.branch_protection:
@@ -576,7 +517,6 @@ class Reconciler:
                         ),
                     ))
 
-        # Check for empty teams
         for team in current.teams:
             if not team.members:
                 findings.append(SecurityFinding(
@@ -586,7 +526,6 @@ class Reconciler:
                     message=f"Team '{team.name}' has no members (stale team?).",
                 ))
 
-        # Check for repos not managed by any team
         repos_in_teams = set()
         for team in current.teams:
             repos_in_teams.update(team.repos.keys())

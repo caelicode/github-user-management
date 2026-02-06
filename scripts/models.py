@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""Data models for GitHub organization management.
-
-Provides type-safe representations of all organization resources
-including members, teams, repositories, and sync operations.
-"""
 
 from __future__ import annotations
 
@@ -13,8 +8,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
-
-# --- Enums ---
 
 class MemberRole(str, Enum):
     ADMIN = "admin"
@@ -40,25 +33,19 @@ class RepoVisibility(str, Enum):
     PRIVATE = "private"
 
 class ActionType(str, Enum):
-    # Members
     MEMBER_INVITE = "member_invite"
     MEMBER_REMOVE = "member_remove"
     MEMBER_UPDATE_ROLE = "member_update_role"
-    # Teams
     TEAM_CREATE = "team_create"
     TEAM_UPDATE = "team_update"
     TEAM_DELETE = "team_delete"
-    # Team membership
     TEAM_MEMBER_ADD = "team_member_add"
     TEAM_MEMBER_REMOVE = "team_member_remove"
     TEAM_MEMBER_UPDATE_ROLE = "team_member_update_role"
-    # Team-repo permissions
     TEAM_REPO_ADD = "team_repo_add"
     TEAM_REPO_REMOVE = "team_repo_remove"
     TEAM_REPO_UPDATE = "team_repo_update"
-    # Repository settings
     REPO_UPDATE = "repo_update"
-    # Branch protection
     BRANCH_PROTECTION_SET = "branch_protection_set"
     BRANCH_PROTECTION_DELETE = "branch_protection_delete"
 
@@ -68,8 +55,6 @@ class ActionStatus(str, Enum):
     FAILED = "failed"
     SKIPPED = "skipped"
 
-
-# --- Organization Resources ---
 
 @dataclass
 class Member:
@@ -111,7 +96,6 @@ class BranchProtection:
         }
 
     def to_api_payload(self) -> dict:
-        """Convert to GitHub API branch protection payload."""
         payload: dict[str, Any] = {
             "required_pull_request_reviews": {
                 "required_approving_review_count": self.required_reviews,
@@ -179,11 +163,8 @@ class Team:
         }
 
 
-# --- State Representations ---
-
 @dataclass
 class OrgState:
-    """Complete state of an organization — desired or actual."""
     org_name: str
     members: list[Member] = field(default_factory=list)
     teams: list[Team] = field(default_factory=list)
@@ -216,11 +197,8 @@ class OrgState:
         }
 
 
-# --- Sync Operations ---
-
 @dataclass
 class SyncAction:
-    """A single action to reconcile desired vs actual state."""
     action_type: ActionType
     resource: str
     details: dict = field(default_factory=dict)
@@ -242,7 +220,6 @@ class SyncAction:
 
     @property
     def symbol(self) -> str:
-        """Symbol for plan output (Terraform-style)."""
         symbols = {
             ActionType.MEMBER_INVITE: "+",
             ActionType.MEMBER_REMOVE: "-",
@@ -264,7 +241,6 @@ class SyncAction:
 
     @property
     def description(self) -> str:
-        """Human-readable description of the action."""
         descriptions = {
             ActionType.MEMBER_INVITE: f"Invite `{self.resource}` as `{self.details.get('role', 'member')}`",
             ActionType.MEMBER_REMOVE: f"Remove `{self.resource}` from organization",
@@ -287,7 +263,6 @@ class SyncAction:
 
 @dataclass
 class SyncPlan:
-    """A complete plan of actions to synchronize an organization."""
     actions: list[SyncAction] = field(default_factory=list)
     timestamp: str = ""
     org_name: str = ""
@@ -341,7 +316,6 @@ class SyncPlan:
 
 @dataclass
 class SyncResult:
-    """Result of executing a sync plan."""
     plan: SyncPlan
     executed_at: str = ""
     dry_run: bool = False
@@ -369,12 +343,9 @@ class SyncResult:
         }
 
 
-# --- Security Audit ---
-
 @dataclass
 class SecurityFinding:
-    """A security concern found during audit."""
-    severity: str  # high, medium, low
+    severity: str
     category: str
     resource: str
     message: str

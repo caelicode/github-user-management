@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""Shared utilities for organization management scripts.
-
-Provides logging setup, file I/O, and common helper functions.
-"""
 
 import json
 import logging
@@ -15,10 +11,6 @@ import yaml
 
 
 def setup_logging(prefix: str = "org_sync") -> str:
-    """Configure logging to both console and timestamped file.
-
-    Returns the log file path.
-    """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_file = f"{prefix}_{timestamp}.log"
 
@@ -34,7 +26,6 @@ def setup_logging(prefix: str = "org_sync") -> str:
 
 
 def write_results_file(filename: str, results: Any) -> bool:
-    """Write results dict to a JSON file."""
     try:
         with open(filename, "w") as f:
             json.dump(results, f, indent=2, default=str)
@@ -46,7 +37,6 @@ def write_results_file(filename: str, results: Any) -> bool:
 
 
 def load_yaml_file(path: str) -> dict:
-    """Load and parse a YAML file. Returns empty dict on failure."""
     try:
         with open(path, "r") as f:
             data = yaml.safe_load(f)
@@ -60,15 +50,10 @@ def load_yaml_file(path: str) -> dict:
 
 
 def get_usernames_from_env(env_var: str = "USERNAMES_JSON", default: str = "[]") -> list[str]:
-    """Parse a JSON array of usernames from an environment variable.
-
-    Handles common formatting issues from GitHub Actions (extra quotes, etc.)
-    """
     try:
         raw = os.environ.get(env_var, default)
         logging.info(f"Raw {env_var} value: {raw}")
 
-        # Strip wrapper quotes if present
         if (raw.startswith("'") and raw.endswith("'")) or \
            (raw.startswith('"') and raw.endswith('"')):
             raw = raw[1:-1]

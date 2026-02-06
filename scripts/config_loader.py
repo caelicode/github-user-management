@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""Configuration loader for organization management.
-
-Loads YAML config files and transforms them into typed OrgState objects.
-Handles validation, cross-referencing, and error reporting.
-"""
 
 import logging
 import os
@@ -32,7 +27,6 @@ DEFAULT_CONFIG_DIR = Path(__file__).parent.parent / "config"
 
 
 def load_yaml_file(path: Path) -> dict:
-    """Load and parse a YAML file."""
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
 
@@ -46,7 +40,6 @@ def load_yaml_file(path: Path) -> dict:
 
 
 def load_members(config_dir: Path) -> tuple[dict, list[Member]]:
-    """Load members from config. Returns (raw_data, parsed_members)."""
     raw = load_yaml_file(config_dir / "members.yml")
     members = []
 
@@ -62,7 +55,6 @@ def load_members(config_dir: Path) -> tuple[dict, list[Member]]:
 
 
 def load_teams(config_dir: Path) -> tuple[dict, list[Team]]:
-    """Load teams from config. Returns (raw_data, parsed_teams)."""
     raw = load_yaml_file(config_dir / "teams.yml")
     teams = []
 
@@ -98,7 +90,6 @@ def load_teams(config_dir: Path) -> tuple[dict, list[Team]]:
 
 
 def load_repositories(config_dir: Path) -> tuple[dict, list[Repository]]:
-    """Load repositories from config. Returns (raw_data, parsed_repos)."""
     raw = load_yaml_file(config_dir / "repositories.yml")
     repositories = []
 
@@ -142,7 +133,6 @@ def load_repositories(config_dir: Path) -> tuple[dict, list[Repository]]:
 
 
 def load_org_name(config_dir: Path) -> str:
-    """Load organization name from org.yml."""
     raw = load_yaml_file(config_dir / "org.yml")
     org_config = raw.get("organization", {})
     return org_config.get("name", "")
@@ -152,15 +142,6 @@ def load_config(
     config_dir: Optional[str] = None,
     validate: bool = True,
 ) -> tuple[OrgState, list[str], list[str]]:
-    """Load all config files and return the desired org state.
-
-    Args:
-        config_dir: Path to config directory. Defaults to ./config/
-        validate: Whether to run validation checks.
-
-    Returns:
-        Tuple of (desired_state, errors, warnings)
-    """
     if config_dir:
         config_path = Path(config_dir)
     else:

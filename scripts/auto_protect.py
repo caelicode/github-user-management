@@ -1,16 +1,4 @@
 #!/usr/bin/env python3
-"""Auto-detect new repositories and apply default branch protection.
-
-Runs on a schedule to ensure every public repo in the org has branch
-protection on its default branch — even repos that haven't been added
-to config/repositories.yml yet.
-
-For repos already managed in config, this script is a no-op (the
-reconciler handles those). This catches the gap for *unmanaged* repos.
-
-Private repos are skipped (GitHub Free doesn't support branch protection
-on private repos).
-"""
 
 import argparse
 import json
@@ -28,7 +16,6 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# --- Default protection rules applied to unmanaged repos ---
 DEFAULT_PROTECTION = {
     "required_pull_request_reviews": {
         "required_approving_review_count": 1,
@@ -41,7 +28,6 @@ DEFAULT_PROTECTION = {
 
 
 def get_client():
-    """Initialize GitHub client from environment."""
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("ORG_MANAGER_TOKEN")
     if not token:
         log.error("GITHUB_TOKEN or ORG_MANAGER_TOKEN environment variable required")
@@ -50,7 +36,6 @@ def get_client():
 
 
 def get_org_name(config_dir: str) -> str:
-    """Read org name from config or environment."""
     env_org = os.environ.get("ORG_NAME")
     if env_org:
         return env_org
@@ -63,7 +48,6 @@ def get_org_name(config_dir: str) -> str:
 
 
 def load_managed_repos(config_dir: str) -> dict:
-    """Load repos from config and return {name: has_branch_protection}."""
     try:
         state, errors, warnings = load_config(config_dir, validate=False)
         return {
@@ -101,18 +85,14 @@ def main():
 
     log.info(f"Auto-protect scan for org: {org}")
 
-    # Load config to find already-managed repos
     managed = load_managed_repos(args.config_dir)
     excluded = set(args.exclude)
 
-    # Also treat managed repos that intentionally have NO branch protection
-    # as excluded (the user explicitly chose not to protect them)
     for name, has_protection in managed.items():
         if not has_protection:
             excluded.add(name)
             log.info(f"  Skipping '{name}' — managed in config with no branch protection (intentional)")
 
-    # List all org repos from GitHub
     all_repos = client.list_org_repos(org)
     if not all_repos:
         log.warning("No repos found (or API error)")
@@ -121,7 +101,6 @@ def main():
 
     log.info(f"Found {len(all_repos)} total repo(s) in {org}")
 
-    # Categorize repos
     newly_protected = []
     already_protected = []
     skipped_private = []
@@ -134,29 +113,24 @@ def main():
         is_private = repo.get("private", True)
         default_branch = repo.get("default_branch", "main")
 
-        # Skip excluded repos
         if name in excluded:
             skipped_excluded.append(name)
             continue
 
-        # Skip repos already managed in config WITH branch protection
         if name in managed and managed[name]:
             skipped_managed.append(name)
             continue
 
-        # Skip private repos (Free plan limitation)
         if is_private:
             skipped_private.append(name)
             continue
 
-        # Check if branch already has protection
         existing = client.get_branch_protection(org, name, default_branch)
         if existing:
             already_protected.append(name)
             log.info(f"  '{name}' already has branch protection — skipping")
             continue
 
-        # This is an unmanaged, unprotected public repo — apply default protection
         log.info(f"  '{name}' (public, unprotected) → applying default protection")
 
         if args.dry_run:
@@ -174,7 +148,6 @@ def main():
             log.error(f"    ✗ Failed to protect {name}: {msg}")
             failed.append({"name": name, "error": msg})
 
-    # --- Build summary ---
     prefix = "[DRY RUN] " if args.dry_run else ""
     summary_lines = [f"## {prefix}Auto-Protect Summary\n"]
 
@@ -218,7 +191,6 @@ def main():
     if not newly_protected and not failed:
         summary_lines.append("All public repos are protected. Nothing to do.\n")
 
-    # Count unmanaged repos (not in config at all)
     unmanaged_repos = [
         r["name"] for r in all_repos
         if r["name"] not in managed
@@ -236,7 +208,6 @@ def main():
     summary = "\n".join(summary_lines)
     write_summary(summary)
 
-    # Set workflow outputs
     output_path = os.environ.get("GITHUB_OUTPUT")
     if output_path:
         with open(output_path, "a") as f:
@@ -245,7 +216,6 @@ def main():
             unmanaged_csv = ",".join(unmanaged_repos) if unmanaged_repos else ""
             f.write(f"unmanaged_repos={unmanaged_csv}\n")
 
-    # Exit code: 2 = changes made, 1 = errors, 0 = nothing to do
     if failed:
         sys.exit(1)
     elif newly_protected:
@@ -255,7 +225,6 @@ def main():
 
 
 def write_summary(text: str):
-    """Write to GitHub Actions step summary if available."""
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:
         with open(summary_path, "a") as f:

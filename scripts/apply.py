@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""Apply entry point — sync the GitHub org to match config.
-
-Loads config, fetches current state, generates a plan, and executes it.
-Produces audit logs, results files, and GitHub Actions summaries.
-
-Exit codes:
-  0 — Success (all actions completed)
-  1 — Error (validation failure, API error, or action failures)
-"""
 
 import argparse
 import json
@@ -47,7 +38,6 @@ def main() -> int:
 
     setup_logging("apply")
 
-    # Load config
     logging.info("Loading configuration...")
     desired_state, errors, warnings = load_config(
         config_dir=args.config_dir, validate=True
@@ -62,7 +52,6 @@ def main() -> int:
     for w in warnings:
         logging.warning(f"  - {w}")
 
-    # Connect to GitHub
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
         logging.error("GITHUB_TOKEN environment variable not set")
@@ -71,11 +60,9 @@ def main() -> int:
     client = GitHubClient(token)
     reconciler = Reconciler(client, desired_state.org_name)
 
-    # Fetch current state
     logging.info("Fetching current state from GitHub...")
     current_state = reconciler.fetch_current_state()
 
-    # Generate plan
     logging.info("Generating sync plan...")
     plan = reconciler.diff(desired_state, current_state)
     plan.warnings.extend(warnings)
@@ -87,30 +74,24 @@ def main() -> int:
         set_github_output("sync_status", "no_changes")
         return 0
 
-    # Execute plan
     dry_run = args.dry_run or os.environ.get("DRY_RUN", "false").lower() == "true"
     mode = "DRY RUN" if dry_run else "LIVE"
     logging.info(f"Executing plan ({mode})...")
 
     result = reconciler.apply(plan, dry_run=dry_run)
 
-    # Audit logging
     audit = AuditLogger(prefix="sync_audit")
     audit.log_result(result)
     logging.info(audit.get_summary())
 
-    # Write results file
     write_results_file("sync_results.json", result.to_dict())
 
-    # Terminal output
     print(format_result_terminal(result))
 
-    # GitHub Actions outputs
     set_github_output("sync_status", "success" if result.success else "failed")
     set_github_output("success_count", str(result.success_count))
     set_github_output("failure_count", str(result.failure_count))
 
-    # GitHub Actions step summary
     summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_file:
         with open(summary_file, "a") as f:

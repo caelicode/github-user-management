@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""Configuration validation for organization management.
-
-Validates YAML config files against JSON schemas and performs
-referential integrity checks across config files.
-"""
 
 import json
 import logging
@@ -23,7 +18,6 @@ SCHEMA_DIR = Path(__file__).parent.parent / "schemas"
 
 
 def _load_schema(schema_name: str) -> dict:
-    """Load a JSON schema file from the schemas directory."""
     schema_path = SCHEMA_DIR / f"{schema_name}.schema.json"
     if not schema_path.exists():
         raise FileNotFoundError(f"Schema not found: {schema_path}")
@@ -32,7 +26,6 @@ def _load_schema(schema_name: str) -> dict:
 
 
 def validate_schema(data: dict, schema_name: str) -> list[str]:
-    """Validate data against a JSON schema. Returns list of errors."""
     if jsonschema is None:
         logging.warning("jsonschema not installed — skipping schema validation")
         return []
@@ -52,14 +45,12 @@ def validate_schema(data: dict, schema_name: str) -> list[str]:
 
 
 def validate_members_config(members_data: dict) -> list[str]:
-    """Validate members.yml structure and content."""
     errors = validate_schema(members_data, "members")
 
     members = members_data.get("members", [])
     if not isinstance(members, list):
         return errors
 
-    # Check for duplicate usernames
     usernames = [m.get("username", "") for m in members if isinstance(m, dict)]
     seen = set()
     for u in usernames:
@@ -71,7 +62,6 @@ def validate_members_config(members_data: dict) -> list[str]:
 
 
 def validate_teams_config(teams_data: dict) -> list[str]:
-    """Validate teams.yml structure and content."""
     errors = validate_schema(teams_data, "teams")
 
     teams = teams_data.get("teams", {})
@@ -82,7 +72,6 @@ def validate_teams_config(teams_data: dict) -> list[str]:
         if not isinstance(team_config, dict):
             continue
 
-        # Check for duplicate members within a team
         members = team_config.get("members", [])
         usernames = [m.get("username", "") for m in members if isinstance(m, dict)]
         seen = set()
@@ -95,7 +84,6 @@ def validate_teams_config(teams_data: dict) -> list[str]:
 
 
 def validate_repositories_config(repos_data: dict) -> list[str]:
-    """Validate repositories.yml structure and content."""
     return validate_schema(repos_data, "repositories")
 
 
@@ -104,10 +92,6 @@ def validate_cross_references(
     teams_data: dict,
     repos_data: dict,
 ) -> tuple[list[str], list[str]]:
-    """Check referential integrity across config files.
-
-    Returns (errors, warnings) tuple.
-    """
     errors = []
     warnings = []
 
@@ -129,7 +113,6 @@ def validate_cross_references(
 
     repo_names = set(repos.keys())
 
-    # Check team members exist in members.yml
     for team_name, team_config in teams.items():
         if not isinstance(team_config, dict):
             continue
@@ -144,7 +127,6 @@ def validate_cross_references(
                     f"who is not in members.yml"
                 )
 
-        # Check team repos exist in repositories.yml (warning, not error)
         for repo_name in team_config.get("repos", {}):
             if repo_name not in repo_names:
                 warnings.append(
@@ -152,7 +134,6 @@ def validate_cross_references(
                     f"which is not managed in repositories.yml (may be externally managed)"
                 )
 
-    # Check branch protection on private repos (free tier limitation)
     for repo_name, repo_config in repos.items():
         if not isinstance(repo_config, dict):
             continue
@@ -165,7 +146,6 @@ def validate_cross_references(
                 f"these rules will be skipped."
             )
 
-    # Check for members not in any team
     members_in_teams = set()
     for team_config in teams.values():
         if not isinstance(team_config, dict):
@@ -188,7 +168,6 @@ def validate_all(
     teams_data: dict,
     repos_data: dict,
 ) -> tuple[list[str], list[str]]:
-    """Run all validations. Returns (errors, warnings)."""
     errors = []
     warnings = []
 

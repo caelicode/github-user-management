@@ -26,6 +26,8 @@ teams:
     repos:
       github-user-management: push
       status-page: push
+      soc-monitoring-stack: push
+      secret-scanner: push
 
   devops:
     description: "Infrastructure, CI/CD, and platform engineering"
@@ -36,6 +38,8 @@ teams:
     repos:
       github-user-management: admin
       status-page: admin
+      soc-monitoring-stack: admin
+      secret-scanner: admin
 
   frontend:
     description: "Frontend development — UI, UX implementation, client-side"
@@ -54,6 +58,7 @@ teams:
         role: maintainer
     repos:
       status-page: push
+      soc-monitoring-stack: push
 
   qa:
     description: "Quality assurance — testing, automation, release validation"
@@ -63,6 +68,8 @@ teams:
         role: maintainer
     repos:
       status-page: pull
+      soc-monitoring-stack: pull
+      secret-scanner: pull
 
   design:
     description: "Design — UI/UX design, prototyping, design systems"
@@ -82,6 +89,8 @@ teams:
     repos:
       github-user-management: push
       status-page: push
+      soc-monitoring-stack: pull
+      secret-scanner: pull
 
   security:
     description: "Security — code review, vulnerability management, compliance"
@@ -92,3 +101,5 @@ teams:
     repos:
       github-user-management: maintain
       status-page: maintain
+      soc-monitoring-stack: maintain
+      secret-scanner: admin
