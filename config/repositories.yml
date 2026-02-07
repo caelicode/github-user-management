@@ -66,3 +66,19 @@ repositories:
       has_issues: true
       has_wiki: false
       has_projects: false
+
+  sendemail:
+    description: "Organization Email Sending Action"
+    visibility: public
+    default_branch: main
+    features:
+      has_issues: true
+      has_wiki: false
+      has_projects: false
+    branch_protection:
+      main:
+        required_reviews: 1
+        dismiss_stale_reviews: true
+        require_status_checks: false
+        required_status_contexts: []
+        enforce_admins: false
