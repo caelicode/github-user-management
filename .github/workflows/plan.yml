@@ -46,11 +46,20 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${PWD}/scripts"
-          python scripts/plan.py --format=markdown --output=plan_output.md
-          echo "plan_generated=true" >> $GITHUB_OUTPUT
+          EXIT_CODE=0
+          python scripts/plan.py --format=markdown --output=plan_output.md || EXIT_CODE=$?
+
+          if [ "$EXIT_CODE" -eq 0 ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          elif [ "$EXIT_CODE" -eq 2 ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "Plan generation failed"
+            exit 1
+          fi
 
       - name: Post plan as PR comment
-        if: steps.plan.outputs.plan_generated == 'true'
+        if: always() && (steps.plan.outputs.has_changes == 'true' || steps.plan.outputs.has_changes == 'false')
         uses: actions/github-script@v7
         with:
           script: |
