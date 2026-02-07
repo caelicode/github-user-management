@@ -1,9 +1,11 @@
 name: Drift Detection
 
+# MODIFIED: Removed schedule trigger — now dispatched externally via crontab.
+# Self-hosted runner for private repo execution.
+
 on:
-  schedule:
-    - cron: '0 */12 * * *'  # Every 12 hours
-  workflow_dispatch:         # Manual trigger
+  # schedule removed — dispatched by external crontab every 12h
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,7 +14,7 @@ permissions:
 jobs:
   detect-drift:
     name: Check for configuration drift
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,7 +65,6 @@ jobs:
             const marker = '<!-- drift-detection -->';
             const title = 'Drift Detected: Organization config out of sync';
 
-            // Check for existing open issue
             const { data: issues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,

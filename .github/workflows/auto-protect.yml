@@ -3,13 +3,11 @@ name: Auto-Protect New Repositories
 # Automatically apply default branch protection to any new public repo
 # that isn't yet managed in config/repositories.yml.
 #
-# Runs every 6 hours and on manual trigger. Also fires when the
-# reconciler finishes (via workflow_run) to catch repos created
-# between scheduled runs.
+# MODIFIED: Removed schedule trigger — now dispatched externally via crontab.
+# Self-hosted runner for private repo execution.
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
+  # schedule removed — dispatched by external crontab every 6h
   workflow_dispatch:
     inputs:
       dry_run:
@@ -28,7 +26,7 @@ permissions:
 jobs:
   auto-protect:
     name: Scan and protect new repositories
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, arm64]
     # Only run on workflow_run if the triggering workflow succeeded
     if: >-
       github.event_name != 'workflow_run' ||
@@ -83,7 +81,6 @@ jobs:
             const marker = '<!-- auto-protect-unmanaged -->';
             const title = 'New repos detected — add to GitOps config';
 
-            // Check for existing open issue
             const { data: issues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -115,7 +112,6 @@ jobs:
               });
               console.log(`Updated existing issue #${existing.number}`);
             } else {
-              // Create label if it doesn't exist
               try {
                 await github.rest.issues.createLabel({
                   owner: context.repo.owner,
